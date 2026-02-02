@@ -1,11 +1,18 @@
 import express from "express";
 import OpenAI from "openai";
-import fetch from "node-fetch"; // ✅ REQUIRED for Vercel
 import { systemPrompt } from "../utils/systemPrompt.js";
 import { aiRateLimiter } from "../middleware/rateLimiter.js";
 import AiConversation from "../models/AiConversation.js";
 
 const router = express.Router();
+
+/* ===============================
+   SAFE FETCH (Render compatible)
+================================ */
+async function getFetch() {
+  const mod = await import("node-fetch");
+  return mod.default;
+}
 
 /* ===============================
    GEMINI HELPER
@@ -14,6 +21,8 @@ async function callGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY missing");
   }
+
+  const fetch = await getFetch();
 
   const url =
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent" +
@@ -60,21 +69,10 @@ router.post("/", aiRateLimiter, async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    /* 🔧 DEV MODE (NO API COST) */
+    /* 🚫 DEV_MODE should be OFF in production */
     if (process.env.DEV_MODE === "true") {
       return res.json({
-        reply: `🎬 Mentor Insight (DEV MODE)
-
-🎯 Suggestions
-• Use angles to show power dynamics
-• Push-in during emotional peaks
-
-🚀 Next Steps
-• Apply to Shot List
-• Refine blocking
-
-❓ Quick Question
-Is this scene verbal or physical?`
+        reply: "DEV_MODE is enabled. Disable it in production."
       });
     }
 
