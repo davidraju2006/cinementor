@@ -15,7 +15,7 @@ async function getFetch() {
 }
 
 /* ===============================
-   GEMINI HELPER (FIXED MODEL)
+   GEMINI HELPER (FINAL FIX)
 ================================ */
 async function callGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) {
@@ -24,8 +24,9 @@ async function callGemini(prompt) {
 
   const fetch = await getFetch();
 
+  // ✅ CORRECT Gemini endpoint (v1 + gemini-pro)
   const url =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent" +
+    "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent" +
     `?key=${process.env.GEMINI_API_KEY}`;
 
   const response = await fetch(url, {
@@ -69,7 +70,7 @@ router.post("/", aiRateLimiter, async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    /* 🚫 DEV_MODE should be OFF in production */
+    // 🚫 DEV_MODE must be OFF in production
     if (process.env.DEV_MODE === "true") {
       return res.json({
         reply: "DEV_MODE is enabled. Disable it in production."
