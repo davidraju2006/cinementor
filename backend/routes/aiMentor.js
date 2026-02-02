@@ -15,7 +15,7 @@ async function getFetch() {
 }
 
 /* ===============================
-   GEMINI HELPER
+   GEMINI HELPER (FIXED MODEL)
 ================================ */
 async function callGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) {
@@ -25,7 +25,7 @@ async function callGemini(prompt) {
   const fetch = await getFetch();
 
   const url =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent" +
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.0-pro:generateContent" +
     `?key=${process.env.GEMINI_API_KEY}`;
 
   const response = await fetch(url, {
@@ -46,7 +46,7 @@ async function callGemini(prompt) {
     data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
   if (!text) {
-    console.error("❌ Gemini raw response:", JSON.stringify(data));
+    console.error("❌ Gemini raw response:", data);
     throw new Error("Empty Gemini response");
   }
 
