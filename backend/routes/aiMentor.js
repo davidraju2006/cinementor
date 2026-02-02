@@ -1,12 +1,15 @@
 import express from "express";
 import OpenAI from "openai";
+import fetch from "node-fetch"; // ✅ REQUIRED for Vercel
 import { systemPrompt } from "../utils/systemPrompt.js";
 import { aiRateLimiter } from "../middleware/rateLimiter.js";
 import AiConversation from "../models/AiConversation.js";
 
 const router = express.Router();
 
-// -------- Gemini helper (native fetch) ----------
+/* ===============================
+   GEMINI HELPER
+================================ */
 async function callGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY missing");
@@ -16,23 +19,34 @@ async function callGemini(prompt) {
     "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent" +
     `?key=${process.env.GEMINI_API_KEY}`;
 
-  const res = await fetch(url, {
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }]
+      contents: [
+        {
+          parts: [{ text: prompt }]
+        }
+      ]
     })
   });
 
-  const data = await res.json();
+  const data = await response.json();
+
   const text =
     data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
 
-  if (!text) throw new Error("Empty Gemini response");
+  if (!text) {
+    console.error("❌ Gemini raw response:", JSON.stringify(data));
+    throw new Error("Empty Gemini response");
+  }
+
   return text;
 }
 
-// -------- Route ----------
+/* ===============================
+   AI MENTOR ROUTE
+================================ */
 router.post("/", aiRateLimiter, async (req, res) => {
   try {
     const {
@@ -42,15 +56,14 @@ router.post("/", aiRateLimiter, async (req, res) => {
       userId = null
     } = req.body || {};
 
-    if (!message) {
+    if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // 🧪 DEV MODE (NO API COST)
+    /* 🔧 DEV MODE (NO API COST) */
     if (process.env.DEV_MODE === "true") {
       return res.json({
-        reply: `🎬 Mentor Insight
-This is a DEV_MODE response.
+        reply: `🎬 Mentor Insight (DEV MODE)
 
 🎯 Suggestions
 • Use angles to show power dynamics
@@ -70,9 +83,15 @@ Is this scene verbal or physical?`
 
     let reply = "";
 
+    /* 🤖 GEMINI */
     if (provider === "GEMINI") {
-      reply = await callGemini(`${sysPrompt}\n\nUser: ${message}`);
-    } else {
+      reply = await callGemini(
+        `${sysPrompt}\n\nUser: ${message}`
+      );
+    }
+
+    /* 🤖 OPENAI (fallback) */
+    else {
       if (!process.env.OPENAI_API_KEY) {
         throw new Error("OPENAI_API_KEY missing");
       }
@@ -95,10 +114,12 @@ Is this scene verbal or physical?`
     }
 
     if (!reply) {
-      return res.status(500).json({ error: "AI returned empty response" });
+      return res.status(500).json({
+        error: "AI returned empty response"
+      });
     }
 
-    // Save non-blocking
+    /* 💾 Save conversation (non-blocking) */
     AiConversation.create({
       userId,
       context,
@@ -110,11 +131,17 @@ Is this scene verbal or physical?`
     return res.json({ reply });
 
   } catch (error) {
+    console.error("❌ AI Mentor crash:", error);
+
     const msg = error?.message?.toLowerCase() || "";
 
-    if (msg.includes("quota") || msg.includes("billing")) {
+    if (
+      msg.includes("quota") ||
+      msg.includes("billing") ||
+      msg.includes("exhaust")
+    ) {
       return res.status(402).json({
-        error: "AI credits exhausted. Please add billing or switch provider."
+        error: "AI credits exhausted. Please try again later."
       });
     }
 

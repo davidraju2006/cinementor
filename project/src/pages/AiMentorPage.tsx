@@ -10,6 +10,9 @@ interface Message {
   text: string;
 }
 
+// ✅ API base URL (ENV BASED)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 export default function AiMentorPage() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -20,10 +23,9 @@ export default function AiMentorPage() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
-  // Load active project info once
+  // Load active project once
   useEffect(() => {
     const active = getActiveProject();
     if (active) {
@@ -41,34 +43,30 @@ export default function AiMentorPage() {
     const text = messageText || input.trim();
     if (!text || loading) return;
 
-    const userMsg: Message = { role: "user", text };
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, { role: "user", text }]);
     setInput("");
     setLoading(true);
 
     try {
       const res = await axios.post(
-        "http://localhost:5000/api/ai/mentor",
+        `${API_BASE_URL}/api/ai/mentor`,
         {
           message: text,
           context: "general",
           projectData: getActiveProject(),
         },
         {
-          validateStatus: () => true, // IMPORTANT: handle 402/429 manually
+          timeout: 30000, // ⏱️ prevent hanging promises
+          validateStatus: () => true,
         }
       );
 
-      // ✅ SUCCESS
       if (res.status === 200) {
         setMessages((prev) => [
           ...prev,
           { role: "ai", text: res.data.reply },
         ]);
-      }
-
-      // 💳 NO CREDITS
-      else if (res.status === 402) {
+      } else if (res.status === 402) {
         setMessages((prev) => [
           ...prev,
           {
@@ -77,10 +75,7 @@ export default function AiMentorPage() {
               "⚠️ AI credits are exhausted.\n\nYou can continue using CineMentor, but AI responses are temporarily unavailable.",
           },
         ]);
-      }
-
-      // ⏱️ RATE LIMITED
-      else if (res.status === 429) {
+      } else if (res.status === 429) {
         setMessages((prev) => [
           ...prev,
           {
@@ -89,10 +84,7 @@ export default function AiMentorPage() {
               "⏱️ Too many requests right now. Please wait a moment and try again.",
           },
         ]);
-      }
-
-      // ❌ OTHER SERVER ERRORS
-      else {
+      } else {
         setMessages((prev) => [
           ...prev,
           {
@@ -108,7 +100,7 @@ export default function AiMentorPage() {
         {
           role: "ai",
           text:
-            "❌ Unable to connect to AI Mentor. Check your server or network.",
+            "❌ Unable to connect to AI Mentor. Please check your network or server.",
         },
       ]);
     } finally {
@@ -116,7 +108,7 @@ export default function AiMentorPage() {
     }
   };
 
-  // Auto-scroll to bottom
+  // Auto-scroll
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -125,7 +117,6 @@ export default function AiMentorPage() {
     <div className="max-w-4xl mx-auto p-6 text-white h-[calc(100vh-4rem)] flex flex-col">
       <h1 className="text-2xl font-bold mb-4">AI Mentor 🤖🎬</h1>
 
-      {/* Chat Area */}
       <div className="flex-1 overflow-y-auto bg-slate-800 border border-slate-700 rounded-lg p-4 space-y-4">
         {messages.map((msg, index) => (
           <MessageBubble key={index} message={msg} />
@@ -133,18 +124,14 @@ export default function AiMentorPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Quick Prompts */}
       <QuickPrompts onSendMessage={sendMessage} />
 
-      {/* Input */}
       <div className="flex mt-4 gap-2">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={
-            loading ? "AI Mentor is thinking..." : "Ask your cinema doubt..."
-          }
+          placeholder={loading ? "AI Mentor is thinking..." : "Ask your cinema doubt..."}
           disabled={loading}
           className="flex-1 p-3 rounded bg-slate-800 border border-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
           onKeyDown={(e) => e.key === "Enter" && sendMessage()}

@@ -46,15 +46,6 @@ function App() {
             <Route path="/pitch/budget" element={<BudgetCalculator />} />
 
 
-
-
-
-
-            
-
-
-
-
           </Routes>
         </main>
 
