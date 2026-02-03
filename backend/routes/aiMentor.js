@@ -1,5 +1,4 @@
 import express from "express";
-import OpenAI from "openai";
 import { systemPrompt } from "../utils/systemPrompt.js";
 import { aiRateLimiter } from "../middleware/rateLimiter.js";
 import AiConversation from "../models/AiConversation.js";
@@ -15,25 +14,25 @@ async function getFetch() {
 }
 
 /* ===============================
-   GEMINI HELPER (FINAL FIX)
+   GEMINI ONLY (NO OPENAI)
 ================================ */
 async function callGemini(prompt) {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY missing");
   }
 
-  const fetch = (await import("node-fetch")).default;
+  const fetch = await getFetch();
 
   const url =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent" +
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent" +
     `?key=${process.env.GEMINI_API_KEY}`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-    }),
+      contents: [{ parts: [{ text: prompt }] }]
+    })
   });
 
   const data = await response.json();
@@ -43,15 +42,14 @@ async function callGemini(prompt) {
 
   if (!text) {
     console.error("❌ Gemini raw response:", data);
-    throw new Error("Empty Gemini response");
+    throw new Error("Gemini returned empty response");
   }
 
   return text;
 }
 
-
 /* ===============================
-   AI MENTOR ROUTE
+   AI MENTOR ROUTE (GEMINI ONLY)
 ================================ */
 router.post("/", aiRateLimiter, async (req, res) => {
   try {
@@ -66,55 +64,20 @@ router.post("/", aiRateLimiter, async (req, res) => {
       return res.status(400).json({ error: "Message is required" });
     }
 
-    // 🚫 DEV_MODE must be OFF in production
+    // 🚫 DEV_MODE OFF IN PROD
     if (process.env.DEV_MODE === "true") {
       return res.json({
         reply: "DEV_MODE is enabled. Disable it in production."
       });
     }
 
-    const provider = (process.env.AI_PROVIDER || "GEMINI").toUpperCase();
     const sysPrompt = systemPrompt(context, projectData);
 
-    let reply = "";
+    const reply = await callGemini(
+      `${sysPrompt}\n\nUser: ${message}`
+    );
 
-    /* 🤖 GEMINI */
-    if (provider === "GEMINI") {
-      reply = await callGemini(
-        `${sysPrompt}\n\nUser: ${message}`
-      );
-    }
-
-    /* 🤖 OPENAI (fallback) */
-    else {
-      if (!process.env.OPENAI_API_KEY) {
-        throw new Error("OPENAI_API_KEY missing");
-      }
-
-      const openai = new OpenAI({
-        apiKey: process.env.OPENAI_API_KEY
-      });
-
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        temperature: 0.6,
-        max_tokens: 400,
-        messages: [
-          { role: "system", content: sysPrompt },
-          { role: "user", content: message }
-        ]
-      });
-
-      reply = completion?.choices?.[0]?.message?.content?.trim();
-    }
-
-    if (!reply) {
-      return res.status(500).json({
-        error: "AI returned empty response"
-      });
-    }
-
-    /* 💾 Save conversation (non-blocking) */
+    // Save conversation (non-blocking)
     AiConversation.create({
       userId,
       context,
@@ -128,20 +91,8 @@ router.post("/", aiRateLimiter, async (req, res) => {
   } catch (error) {
     console.error("❌ AI Mentor crash:", error);
 
-    const msg = error?.message?.toLowerCase() || "";
-
-    if (
-      msg.includes("quota") ||
-      msg.includes("billing") ||
-      msg.includes("exhaust")
-    ) {
-      return res.status(402).json({
-        error: "AI credits exhausted. Please try again later."
-      });
-    }
-
     return res.status(500).json({
-      error: "AI Mentor failed. Try again later."
+      error: "Gemini AI failed. Check API key & Google AI settings."
     });
   }
 });
