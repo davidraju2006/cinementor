@@ -2,43 +2,54 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-// 2️⃣ Imports
+// 2️⃣ Core imports
 import express from "express";
 import cors from "cors";
 
+// 3️⃣ Route imports
 import aiMentorRoute from "./routes/aiMentor.js";
 import shotListRoute from "./routes/shotList.js";
 import shotListExportRoute from "./routes/shotListExport.js";
+
+// 4️⃣ DB
 import { connectDB } from "./utils/db.js";
 
-// 3️⃣ Debug logs (Render visibility)
-console.log("Starting CineMentor backend...");
-console.log("OPENAI KEY LOADED:", !!process.env.OPENAI_API_KEY);
+// 5️⃣ Debug logs (important for Render)
+console.log("🚀 Starting CineMentor backend...");
+console.log("GEMINI KEY LOADED:", !!process.env.GEMINI_API_KEY);
 
-// 4️⃣ Create Express app
+// 6️⃣ Create Express app
 const app = express();
 
 // ✅ REQUIRED for Render + express-rate-limit
 app.set("trust proxy", 1);
 
-// 5️⃣ Middleware
+// 7️⃣ Global middleware
 app.use(cors());
 app.use(express.json());
 
-// 6️⃣ Health check / root route
+// 8️⃣ Health check
 app.get("/", (req, res) => {
   res.status(200).send("CineMentor Backend is Running 🚀");
 });
 
-// 7️⃣ API routes
+// 9️⃣ API routes (IMPORTANT)
 app.use("/api/ai/mentor", aiMentorRoute);
 app.use("/api/ai/shotlist", shotListRoute);
 app.use("/api/shotlist/export", shotListExportRoute);
 
-// 8️⃣ Port (Render injects PORT automatically)
+// 🔟 404 handler (helps debugging)
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found",
+    path: req.originalUrl
+  });
+});
+
+// 1️⃣1️⃣ Port (Render injects automatically)
 const PORT = process.env.PORT || 5000;
 
-// 9️⃣ Start server AFTER MongoDB connects
+// 1️⃣2️⃣ Start server AFTER MongoDB connects
 async function startServer() {
   try {
     await connectDB();
@@ -49,9 +60,9 @@ async function startServer() {
     });
   } catch (err) {
     console.error("❌ Failed to start server:", err);
-    process.exit(1); // Render understands this as a crash
+    process.exit(1);
   }
 }
 
-// 🔟 Boot
+// 1️⃣3️⃣ Boot
 startServer();
