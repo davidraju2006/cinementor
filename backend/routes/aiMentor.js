@@ -22,23 +22,18 @@ async function callGemini(prompt) {
     throw new Error("GEMINI_API_KEY missing");
   }
 
-  const fetch = await getFetch();
+  const fetch = (await import("node-fetch")).default;
 
-  // ✅ CORRECT Gemini endpoint (v1 + gemini-pro)
   const url =
-    "https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent" +
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent" +
     `?key=${process.env.GEMINI_API_KEY}`;
 
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [
-        {
-          parts: [{ text: prompt }]
-        }
-      ]
-    })
+      contents: [{ parts: [{ text: prompt }] }],
+    }),
   });
 
   const data = await response.json();
@@ -53,6 +48,7 @@ async function callGemini(prompt) {
 
   return text;
 }
+
 
 /* ===============================
    AI MENTOR ROUTE
